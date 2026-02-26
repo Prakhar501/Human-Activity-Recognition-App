@@ -1,0 +1,9 @@
+# Required packages for HAR Model Training
+tensorflow>=2.12.0
+numpy>=1.23.0
+matplotlib>=3.5.0
+scikit-learn>=1.0.0
+pandas>=1.3.0
+
+# Optional: For faster training (if you have NVIDIA GPU)
+# tensorflow-gpu>=2.12.0
