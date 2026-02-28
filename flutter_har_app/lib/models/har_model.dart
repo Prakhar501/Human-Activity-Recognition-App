@@ -18,6 +18,16 @@ class HARModel {
     "LAYING"
   ];
 
+  // Static activity indices
+  static const Set<int> staticActivityIndices = {3, 4, 5}; // SITTING, STANDING, LAYING
+
+  // Temporal smoothing - keep history of predictions
+  final List<PredictionResult> _predictionHistory = [];
+  static const int maxHistorySize = 5;
+  
+  // Last sensor data for orientation analysis
+  List<List<double>>? _lastSensorData;
+
   /// Initialize and load the TFLite model
   Future<void> loadModel() async {
     try {
@@ -42,6 +52,9 @@ class HARModel {
         'Expected input shape [128, 6], got [${sensorData.length}, ${sensorData[0].length}]'
       );
     }
+
+    // Store for orientation analysis
+    _lastSensorData = sensorData;
 
     // If model not loaded, return simulated prediction
     if (_interpreter == null) {
@@ -69,36 +82,26 @@ class HARModel {
       print('HAR Model: Raw probabilities (sum=${sum.toStringAsFixed(4)}): '
             '${probabilities.map((p) => (p * 100).toStringAsFixed(1) + "%").join(", ")}');
 
-      // Find max probability and second max
+      // Find max probability
       int maxIndex = 0;
-      int secondMaxIndex = 1;
       double maxProb = probabilities[0];
-      double secondMaxProb = probabilities[1];
       
-      if (secondMaxProb > maxProb) {
-        maxIndex = 1;
-        secondMaxIndex = 0;
-        double temp = maxProb;
-        maxProb = secondMaxProb;
-        secondMaxProb = temp;
-      }
-      
-      for (int i = 2; i < probabilities.length; i++) {
+      for (int i = 1; i < probabilities.length; i++) {
         if (probabilities[i] > maxProb) {
-          secondMaxProb = maxProb;
-          secondMaxIndex = maxIndex;
           maxProb = probabilities[i];
           maxIndex = i;
-        } else if (probabilities[i] > secondMaxProb) {
-          secondMaxProb = probabilities[i];
-          secondMaxIndex = i;
         }
       }
 
+      // Apply orientation-based refinement for static activities
+      if (staticActivityIndices.contains(maxIndex)) {
+        var orientationInfo = _analyzeOrientation(sensorData);
+        maxIndex = _refineStaticActivity(maxIndex, probabilities, orientationInfo);
+        maxProb = probabilities[maxIndex];
+        print('HAR Model: Orientation-refined activity = ${activityLabels[maxIndex]}');
+      }
+
       // Adjust confidence to be more realistic
-      // If model says 99.9%, we soften it to 85-95% range
-      // Formula: confidence = 0.6 + (rawProb * 0.35)
-      // This maps: 1.0 -> 0.95, 0.9 -> 0.915, 0.8 -> 0.88
       double adjustedConfidence = maxProb;
       if (maxProb > 0.95) {
         // Very confident predictions (>95%) get softened more
@@ -110,21 +113,158 @@ class HARModel {
       
       // Clamp to valid range
       adjustedConfidence = adjustedConfidence.clamp(0.0, 0.98);
-      
-      print('HAR Model: Predicted=${activityLabels[maxIndex]} '
-            'Raw=${(maxProb * 100).toStringAsFixed(1)}%, '
-            'Adjusted=${(adjustedConfidence * 100).toStringAsFixed(1)}%');
 
-      return PredictionResult(
+      // Create result
+      var result = PredictionResult(
         activityName: activityLabels[maxIndex],
         activityIndex: maxIndex,
         confidence: adjustedConfidence,
         allProbabilities: probabilities,
       );
+
+      // Apply temporal smoothing for static activities
+      result = _applyTemporalSmoothing(result);
+      
+      print('HAR Model: Final=${result.activityName} '
+            'Confidence=${(result.confidence * 100).toStringAsFixed(1)}%');
+
+      return result;
     } catch (e) {
       print('Error during prediction: $e');
       return _simulatePredict(sensorData);
     }
+  }
+
+  /// Analyze device orientation from accelerometer data
+  Map<String, double> _analyzeOrientation(List<List<double>> sensorData) {
+    // Calculate mean acceleration (gravity component)
+    double sumX = 0, sumY = 0, sumZ = 0;
+    for (var row in sensorData) {
+      sumX += row[0];
+      sumY += row[1];
+      sumZ += row[2];
+    }
+    
+    double meanX = sumX / sensorData.length;
+    double meanY = sumY / sensorData.length;
+    double meanZ = sumZ / sensorData.length;
+    
+    // Calculate magnitude and dominant axis
+    double magnitude = sqrt(meanX * meanX + meanY * meanY + meanZ * meanZ);
+    
+    print('HAR Model: Orientation - X:${meanX.toStringAsFixed(2)}, '
+          'Y:${meanY.toStringAsFixed(2)}, Z:${meanZ.toStringAsFixed(2)}, '
+          'Mag:${magnitude.toStringAsFixed(2)}');
+    
+    return {
+      'meanX': meanX,
+      'meanY': meanY,
+      'meanZ': meanZ,
+      'magnitude': magnitude,
+    };
+  }
+
+  /// Refine static activity prediction using orientation
+  int _refineStaticActivity(int predictedIndex, List<double> probabilities, 
+                            Map<String, double> orientation) {
+    double meanX = orientation['meanX']!;
+    double meanY = orientation['meanY']!;
+    double meanZ = orientation['meanZ']!;
+    
+    // Find dominant axis (which has highest absolute value)
+    double absX = meanX.abs();
+    double absY = meanY.abs();
+    double absZ = meanZ.abs();
+    
+    // LAYING: Device is horizontal (Z-axis dominant, X/Y has gravity)
+    // SITTING/STANDING: Device is vertical (Z-axis has less gravity)
+    
+    // Simple heuristic:
+    // If Z-axis dominates (device lying flat): likely LAYING
+    // If X or Y axis dominates (device vertical): likely SITTING or STANDING
+    
+    double horizontalGravity = sqrt(absX * absX + absY * absY);
+    double verticalGravity = absZ;
+    
+    bool isHorizontal = verticalGravity > horizontalGravity;
+    
+    // Get top 2 predictions from static activities
+    double layingProb = probabilities[5];  // LAYING
+    double sittingProb = probabilities[3]; // SITTING
+    double standingProb = probabilities[4]; // STANDING
+    
+    int refinedIndex = predictedIndex;
+    
+    if (isHorizontal) {
+      // Device horizontal: favor LAYING
+      if (layingProb > 0.15) { // If LAYING has reasonable probability
+        refinedIndex = 5; // LAYING
+        print('HAR Model: Orientation suggests LAYING (horizontal)');
+      }
+    } else {
+      // Device vertical: favor SITTING or STANDING
+      if (sittingProb > standingProb && sittingProb > 0.15) {
+        refinedIndex = 3; // SITTING
+        print('HAR Model: Orientation suggests SITTING (vertical)');
+      } else if (standingProb > 0.15) {
+        refinedIndex = 4; // STANDING
+        print('HAR Model: Orientation suggests STANDING (vertical)');
+      }
+    }
+    
+    return refinedIndex;
+  }
+
+  /// Apply temporal smoothing to reduce flickering predictions
+  PredictionResult _applyTemporalSmoothing(PredictionResult currentResult) {
+    // Add to history
+    _predictionHistory.add(currentResult);
+    if (_predictionHistory.length > maxHistorySize) {
+      _predictionHistory.removeAt(0);
+    }
+    
+    // If not enough history or dynamic activity, return as-is
+    if (_predictionHistory.length < 3 || 
+        !staticActivityIndices.contains(currentResult.activityIndex)) {
+      return currentResult;
+    }
+    
+    // For static activities, check consistency
+    Map<int, int> activityCount = {};
+    for (var pred in _predictionHistory) {
+      activityCount[pred.activityIndex] = 
+          (activityCount[pred.activityIndex] ?? 0) + 1;
+    }
+    
+    // Find most common activity in history
+    int mostCommonActivity = currentResult.activityIndex;
+    int maxCount = 0;
+    activityCount.forEach((activity, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommonActivity = activity;
+      }
+    });
+    
+    // If current prediction differs from trend and has low confidence, use trend
+    if (mostCommonActivity != currentResult.activityIndex && 
+        currentResult.confidence < 0.85 && 
+        maxCount >= 2) {
+      print('HAR Model: Smoothing applied - using ${activityLabels[mostCommonActivity]} '
+            'based on history (occurred $maxCount/${_predictionHistory.length} times)');
+      
+      // Boost confidence slightly for consistent predictions
+      double boostedConfidence = min(0.88, currentResult.confidence + 0.1);
+      
+      return PredictionResult(
+        activityName: activityLabels[mostCommonActivity],
+        activityIndex: mostCommonActivity,
+        confidence: boostedConfidence,
+        allProbabilities: currentResult.allProbabilities,
+      );
+    }
+    
+    return currentResult;
   }
 
   /// Simulate predictions based on sensor data patterns (DEMO MODE)
@@ -202,6 +342,8 @@ class HARModel {
   void dispose() {
     _interpreter?.close();
     _interpreter = null;
+    _predictionHistory.clear();
+    _lastSensorData = null;
   }
 }
 

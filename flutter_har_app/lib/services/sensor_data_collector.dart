@@ -90,9 +90,15 @@ class SensorDataCollector {
         _processDataWindow();
         _lastProcessTime = currentTime;
 
-        // Clear ALL old data to ensure fresh collection (no sliding window)
-        _accelerometerData.clear();
-        _gyroscopeData.clear();
+        // Use sliding window: keep 50% overlap (64 samples) for smoother transitions
+        // This helps stabilize static activity detection
+        int keepSamples = windowSize ~/ 2; // Keep 64 samples
+        if (_accelerometerData.length > keepSamples) {
+          _accelerometerData.removeRange(0, _accelerometerData.length - keepSamples);
+        }
+        if (_gyroscopeData.length > keepSamples) {
+          _gyroscopeData.removeRange(0, _gyroscopeData.length - keepSamples);
+        }
       }
     }
     
