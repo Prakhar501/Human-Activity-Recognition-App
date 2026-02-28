@@ -168,7 +168,6 @@ fun HomeScreen(onSelect: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Default Activities
         listOf("Walking", "Sitting", "Standing", "Running").forEach { activity ->
 
             Card(
@@ -193,7 +192,7 @@ fun HomeScreen(onSelect: (String) -> Unit) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Custom Activity Input
+
         OutlinedTextField(
             value = customActivity,
             onValueChange = { customActivity = it },
@@ -208,7 +207,6 @@ fun HomeScreen(onSelect: (String) -> Unit) {
             shape = RoundedCornerShape(14.dp)
         )
 
-        // Start Button
         Button(
             onClick = {
                 if (customActivity.isNotBlank()) {
@@ -232,7 +230,6 @@ fun HomeScreen(onSelect: (String) -> Unit) {
 }
 
 
-/* ---------------- ACTIVITY SCREEN ---------------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
