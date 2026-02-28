@@ -1,10 +1,7 @@
 package com.example.practcumproject
 
 import android.content.Context
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
+import android.hardware.*
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
@@ -27,21 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import java.io.File
+import java.io.BufferedWriter
+import java.io.FileWriter
 import java.util.concurrent.TimeUnit
 
-
 private val Aqua = Color(0xFF00E5FF)
-
-private val DarkColors = darkColorScheme(
-    primary = Aqua,
-    background = Color.Black,
-    surface = Color.Black,
-    onPrimary = Color.Black,
-    onBackground = Color.White,
-    onSurface = Color.White,
-    outline = Aqua
-)
-
 
 class MainActivity : ComponentActivity(), SensorEventListener {
 
@@ -56,7 +43,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     private var isRecording by mutableStateOf(false)
     private var startTime by mutableStateOf(0L)
 
-    private val sensorDataList = mutableListOf<SensorData>()
+    private val sensorDataList = mutableListOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,24 +53,20 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
 
         setContent {
-            MaterialTheme(colorScheme = DarkColors) {
-                Surface(modifier = Modifier.fillMaxSize(), color = Color.Black) {
-                    if (currentLabel == null) {
-                        HomeScreen { startSession(it) }
-                    } else {
-                        ActivityScreen(
-                            activityName = currentLabel!!,
-                            isRecording = isRecording,
-                            startTime = startTime,
-                            onBack = { stopAndReset() },
-                            onStop = { isRecording = false },
-                            onSave = {
-                                saveDataToCSV()
-                                stopAndReset()
-                            }
-                        )
+            if (currentLabel == null) {
+                HomeScreen { startSession(it) }
+            } else {
+                ActivityScreen(
+                    activityName = currentLabel!!,
+                    isRecording = isRecording,
+                    startTime = startTime,
+                    onBack = { stopAndReset() },
+                    onStop = { isRecording = false },
+                    onSave = {
+                        saveDataToCSV()
+                        stopAndReset()
                     }
-                }
+                )
             }
         }
     }
@@ -123,82 +106,109 @@ class MainActivity : ComponentActivity(), SensorEventListener {
             Sensor.TYPE_GYROSCOPE -> gyroValues = event.values.clone()
         }
 
-        sensorDataList.add(
-            SensorData(
-                System.currentTimeMillis(),
-                accValues[0], accValues[1], accValues[2],
-                gyroValues[0], gyroValues[1], gyroValues[2],
-                currentLabel!!
-            )
-        )
+        val row = "${System.currentTimeMillis()}," +
+                "${accValues[0]},${accValues[1]},${accValues[2]}," +
+                "${gyroValues[0]},${gyroValues[1]},${gyroValues[2]}," +
+                currentLabel
+
+        sensorDataList.add(row)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-
     private fun saveDataToCSV() {
-        if (sensorDataList.isEmpty()) return
 
-        val file = File(getExternalFilesDir(null), "har_data.csv")
-        val writer = file.bufferedWriter()
-
-        writer.write("timestamp,accX,accY,accZ,gyroX,gyroY,gyroZ,label\n")
-        sensorDataList.forEach {
-            writer.write(
-                "${it.timestamp},${it.accX},${it.accY},${it.accZ}," +
-                        "${it.gyroX},${it.gyroY},${it.gyroZ},${it.label}\n"
-            )
+        if (sensorDataList.isEmpty()) {
+            Toast.makeText(this, "No data to save", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        val file = File(filesDir, "har_dataset.csv")
+        val fileExists = file.exists()
+
+        val writer: BufferedWriter = BufferedWriter(FileWriter(file, true))
+
+        if (!fileExists) {
+            writer.write("timestamp,accX,accY,accZ,gyroX,gyroY,gyroZ,label\n")
+        }
+
+        sensorDataList.forEach {
+            writer.write(it + "\n")
+        }
+
+        writer.flush()
         writer.close()
 
-        Toast.makeText(this, "Session saved", Toast.LENGTH_SHORT).show()
+        sensorDataList.clear()
+
+        Toast.makeText(this, "Session appended successfully", Toast.LENGTH_SHORT).show()
     }
 }
 
-
 @Composable
 fun HomeScreen(onSelect: (String) -> Unit) {
+
     var customActivity by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .padding(top = 48.dp, start = 20.dp, end = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
         Text(
             text = "Activity Recorder",
-            fontSize = 34.sp,
+            fontSize = 32.sp,
             fontWeight = FontWeight.ExtraBold,
             color = Aqua
         )
 
-        Text(
-            text = "Select an activity to start recording",
-            fontSize = 16.sp,
-            color = Color.White.copy(alpha = 0.8f)
-        )
+        Spacer(modifier = Modifier.height(8.dp))
 
-        listOf("🚶 Walking", "🪑 Sitting", "🧍 Standing", "🏃 Running").forEach {
-            ActivityCard(it) { onSelect(it.substringAfter(" ")) }
+        // Default Activities
+        listOf("Walking", "Sitting", "Standing", "Running").forEach { activity ->
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(activity) },
+                colors = CardDefaults.cardColors(
+                    containerColor = Color(0xFF1E1E1E)
+                ),
+                border = BorderStroke(1.dp, Aqua),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text(
+                    text = activity,
+                    modifier = Modifier.padding(20.dp),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White
+                )
+            }
         }
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Custom Activity Input
         OutlinedTextField(
             value = customActivity,
             onValueChange = { customActivity = it },
-            label = { Text("Custom activity", color = Color.White) },
-            textStyle = LocalTextStyle.current.copy(color = Color.White),
+            label = { Text("Custom Activity", color = Color.White) },
             modifier = Modifier.fillMaxWidth(),
+            textStyle = LocalTextStyle.current.copy(color = Color.White),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Aqua,
-                unfocusedBorderColor = Color.White,
+                unfocusedBorderColor = Color.Gray,
                 cursorColor = Aqua
-            )
+            ),
+            shape = RoundedCornerShape(14.dp)
         )
 
+        // Start Button
         Button(
             onClick = {
                 if (customActivity.isNotBlank()) {
@@ -207,31 +217,22 @@ fun HomeScreen(onSelect: (String) -> Unit) {
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Aqua)
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Aqua,
+                contentColor = Color.Black
+            ),
+            shape = RoundedCornerShape(14.dp)
         ) {
-            Text("Start", color = Color.Black)
+            Text(
+                text = "Start Custom Activity",
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }
 
-@Composable
-fun ActivityCard(label: String, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(containerColor = Color.Black),
-        border = BorderStroke(1.dp, Aqua),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Text(
-            text = label,
-            color = Color.White,
-            fontSize = 20.sp,
-            modifier = Modifier.padding(20.dp)
-        )
-    }
-}
+
+/* ---------------- ACTIVITY SCREEN ---------------- */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -243,6 +244,7 @@ fun ActivityScreen(
     onStop: () -> Unit,
     onSave: () -> Unit
 ) {
+
     var elapsed by remember { mutableStateOf(0L) }
 
     LaunchedEffect(isRecording) {
@@ -261,10 +263,9 @@ fun ActivityScreen(
             title = { Text(activityName, color = Aqua) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    Icon(Icons.Default.ArrowBack, contentDescription = null, tint = Color.White)
                 }
-            },
-            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+            }
         )
 
         Column(
@@ -277,28 +278,29 @@ fun ActivityScreen(
 
             Text(
                 String.format("%02d:%02d", minutes, seconds),
-                fontSize = 52.sp,
-                fontWeight = FontWeight.ExtraBold,
+                fontSize = 48.sp,
+                fontWeight = FontWeight.Bold,
                 color = Aqua
             )
 
-            Text(if (isRecording) "Recording" else "Stopped", color = Color.White)
+            Text(
+                if (isRecording) "Recording..." else "Stopped",
+                color = Color.White
+            )
 
-            OutlinedButton(
+            Button(
                 onClick = onStop,
                 enabled = isRecording,
-                border = BorderStroke(1.dp, Aqua),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Stop Recording", color = Color.White)
+                Text("Stop")
             }
 
             Button(
                 onClick = onSave,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Aqua)
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Save Session", color = Color.Black)
+                Text("Save Session")
             }
         }
     }
