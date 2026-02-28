@@ -67,6 +67,17 @@ class _HARHomePageState extends State<HARHomePage> {
   int _totalPredictions = 0;
   String _selectedTrueActivity = "WALKING";
 
+  // Helper function to format activity names for display
+  String _formatActivityName(String activityName) {
+    // Merge all walking types into one
+    if (activityName.contains('WALKING')) {
+      return 'Walking';
+    }
+    // Format other activities: SITTING -> Sitting
+    return activityName.substring(0, 1).toUpperCase() + 
+           activityName.substring(1).toLowerCase();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -128,7 +139,7 @@ class _HARHomePageState extends State<HARHomePage> {
       final result = await _harModel.predict(sensorData);
 
       setState(() {
-        _currentActivity = result.activityName;
+        _currentActivity = _formatActivityName(result.activityName);
         _confidence = result.confidence;
         _probabilities = result.allProbabilities;
         _totalPredictions++;
@@ -526,7 +537,14 @@ class _HARHomePageState extends State<HARHomePage> {
             HARModel.activityLabels.length,
             (index) {
               final probability = _probabilities[index];
-              final isTopPrediction = _currentActivity == HARModel.activityLabels[index];
+              final activityLabel = HARModel.activityLabels[index];
+              
+              // Skip WALKING_UPSTAIRS and WALKING_DOWNSTAIRS (now merged into WALKING)
+              if (activityLabel == 'WALKING_UPSTAIRS' || activityLabel == 'WALKING_DOWNSTAIRS') {
+                return const SizedBox.shrink();
+              }
+              
+              final isTopPrediction = _currentActivity == _formatActivityName(activityLabel);
               
               return Padding(
                 padding: EdgeInsets.symmetric(vertical: screenWidth * 0.015),
@@ -537,7 +555,7 @@ class _HARHomePageState extends State<HARHomePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          HARModel.activityLabels[index],
+                          _formatActivityName(activityLabel),
                           style: TextStyle(
                             fontSize: labelSize,
                             fontWeight: isTopPrediction ? FontWeight.bold : FontWeight.normal,
@@ -642,10 +660,14 @@ class _HARHomePageState extends State<HARHomePage> {
                 Icons.arrow_drop_down,
                 color: Theme.of(context).colorScheme.primary,
               ),
-              items: HARModel.activityLabels.map((String activity) {
+              items: HARModel.activityLabels
+                .where((activity) => 
+                  activity != 'WALKING_UPSTAIRS' && 
+                  activity != 'WALKING_DOWNSTAIRS')
+                .map((String activity) {
                 return DropdownMenuItem<String>(
                   value: activity,
-                  child: Text(activity),
+                  child: Text(_formatActivityName(activity)),
                 );
               }).toList(),
               onChanged: (String? newValue) {

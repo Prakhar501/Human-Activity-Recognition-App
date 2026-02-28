@@ -77,9 +77,15 @@ class HARModel {
       // Get probabilities - model already has softmax, direct use
       List<double> probabilities = List<double>.from(output[0]);
       
+      // MERGE WALKING ACTIVITIES: Combine upstairs and downstairs into walking
+      // Index 0 = WALKING, Index 1 = WALKING_UPSTAIRS, Index 2 = WALKING_DOWNSTAIRS
+      probabilities[0] = probabilities[0] + probabilities[1] + probabilities[2];
+      probabilities[1] = 0.0;  // Clear upstairs
+      probabilities[2] = 0.0;  // Clear downstairs
+      
       // Debug: Log raw output from model
       double sum = probabilities.reduce((a, b) => a + b);
-      print('HAR Model: Raw probabilities (sum=${sum.toStringAsFixed(4)}): '
+      print('HAR Model: Merged probabilities (sum=${sum.toStringAsFixed(4)}): '
             '${probabilities.map((p) => (p * 100).toStringAsFixed(1) + "%").join(", ")}');
 
       // Find max probability
@@ -284,9 +290,9 @@ class HARModel {
     if (avgMovement < 5) {
       predictedActivity = Random().nextBool() ? 3 : 4; // SITTING or STANDING
     } else if (avgMovement < 15) {
-      predictedActivity = 0; // WALKING
+      predictedActivity = 0; // WALKING (merged all walking types)
     } else if (avgMovement < 25) {
-      predictedActivity = Random().nextBool() ? 1 : 2; // UPSTAIRS or DOWNSTAIRS
+      predictedActivity = 0; // WALKING (merged, no more upstairs/downstairs)
     } else {
       predictedActivity = 5; // LAYING
     }
