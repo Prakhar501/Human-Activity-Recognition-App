@@ -34,5 +34,5 @@ flutter:
   
   assets:
     - assets/models/har_model.tflite
-    # Optional: If you have PyTorch model converted to TFLite
-    # Place your .tflite model file in assets/models/
+    - assets/models/har_model_combined_4act.tflite
+    # New combined model trained on UCI + Personal dataset (4 activities)

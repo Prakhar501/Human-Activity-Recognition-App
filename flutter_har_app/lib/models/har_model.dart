@@ -6,20 +6,19 @@ class HARModel {
   Interpreter? _interpreter;
   static const int sequenceLength = 128;
   static const int numFeatures = 6;  // Only Accel(3) + Gyro(3)
-  static const int numClasses = 6;
+  static const int numClasses = 4;  // Updated to 4 activities
 
-  // Activity labels matching UCI HAR dataset
+  // Activity labels - Combined Dataset (UCI + Personal)
+  // Walking types merged into one WALKING activity
   static const List<String> activityLabels = [
-    "WALKING",
-    "WALKING_UPSTAIRS",
-    "WALKING_DOWNSTAIRS",
-    "SITTING",
-    "STANDING",
-    "LAYING"
+    "WALKING",      // Index 0 - All walking types merged
+    "SITTING",      // Index 1
+    "STANDING",     // Index 2
+    "LAYING"        // Index 3
   ];
 
-  // Static activity indices
-  static const Set<int> staticActivityIndices = {3, 4, 5}; // SITTING, STANDING, LAYING
+  // Static activity indices (updated for 4 activities)
+  static const Set<int> staticActivityIndices = {1, 2, 3}; // SITTING, STANDING, LAYING
 
   // Temporal smoothing - keep history of predictions
   final List<PredictionResult> _predictionHistory = [];
@@ -32,9 +31,10 @@ class HARModel {
   Future<void> loadModel() async {
     try {
       _interpreter = await Interpreter.fromAsset(
-        'assets/models/har_model.tflite',
+        'assets/models/har_model_combined_4act.tflite',
       );
-      print('HAR Model loaded successfully');
+      print('✅ Combined HAR Model loaded successfully (4 activities)');
+      print('📊 Model trained on: UCI + Personal Dataset');
     } catch (e) {
       print('Error loading model: $e');
       print('⚠️ Running in DEMO MODE with simulated predictions');
@@ -68,24 +68,18 @@ class HARModel {
         (_) => sensorData.map((row) => row.toList()).toList(),
       );
 
-      // Prepare output tensor [1, 6] - properly initialized
+      // Prepare output tensor [1, 4] - properly initialized for 4 activities
       var output = List.generate(1, (_) => List<double>.filled(numClasses, 0.0));
 
       // Run inference
       _interpreter!.run(input, output);
 
-      // Get probabilities - model already has softmax, direct use
+      // Get probabilities - model already has softmax and 4 outputs
       List<double> probabilities = List<double>.from(output[0]);
-      
-      // MERGE WALKING ACTIVITIES: Combine upstairs and downstairs into walking
-      // Index 0 = WALKING, Index 1 = WALKING_UPSTAIRS, Index 2 = WALKING_DOWNSTAIRS
-      probabilities[0] = probabilities[0] + probabilities[1] + probabilities[2];
-      probabilities[1] = 0.0;  // Clear upstairs
-      probabilities[2] = 0.0;  // Clear downstairs
       
       // Debug: Log raw output from model
       double sum = probabilities.reduce((a, b) => a + b);
-      print('HAR Model: Merged probabilities (sum=${sum.toStringAsFixed(4)}): '
+      print('HAR Combined Model: Probabilities (sum=${sum.toStringAsFixed(4)}): '
             '${probabilities.map((p) => (p * 100).toStringAsFixed(1) + "%").join(", ")}');
 
       // Find max probability
@@ -194,26 +188,26 @@ class HARModel {
     
     bool isHorizontal = verticalGravity > horizontalGravity;
     
-    // Get top 2 predictions from static activities
-    double layingProb = probabilities[5];  // LAYING
-    double sittingProb = probabilities[3]; // SITTING
-    double standingProb = probabilities[4]; // STANDING
+    // Get top 2 predictions from static activities (4-activity model)
+    double layingProb = probabilities[3];  // LAYING (index 3)
+    double sittingProb = probabilities[1]; // SITTING (index 1)
+    double standingProb = probabilities[2]; // STANDING (index 2)
     
     int refinedIndex = predictedIndex;
     
     if (isHorizontal) {
       // Device horizontal: favor LAYING
       if (layingProb > 0.15) { // If LAYING has reasonable probability
-        refinedIndex = 5; // LAYING
+        refinedIndex = 3; // LAYING
         print('HAR Model: Orientation suggests LAYING (horizontal)');
       }
     } else {
       // Device vertical: favor SITTING or STANDING
       if (sittingProb > standingProb && sittingProb > 0.15) {
-        refinedIndex = 3; // SITTING
+        refinedIndex = 1; // SITTING
         print('HAR Model: Orientation suggests SITTING (vertical)');
       } else if (standingProb > 0.15) {
-        refinedIndex = 4; // STANDING
+        refinedIndex = 2; // STANDING
         print('HAR Model: Orientation suggests STANDING (vertical)');
       }
     }
@@ -285,16 +279,16 @@ class HARModel {
     }
     double avgMovement = totalMovement / sensorData.length;
 
-    // Simulate activity detection based on movement
+    // Simulate activity detection based on movement (4-activity model)
     int predictedActivity;
     if (avgMovement < 5) {
-      predictedActivity = Random().nextBool() ? 3 : 4; // SITTING or STANDING
+      predictedActivity = Random().nextBool() ? 1 : 2; // SITTING (1) or STANDING (2)
     } else if (avgMovement < 15) {
-      predictedActivity = 0; // WALKING (merged all walking types)
+      predictedActivity = 0; // WALKING (0) - merged all walking types
     } else if (avgMovement < 25) {
-      predictedActivity = 0; // WALKING (merged, no more upstairs/downstairs)
+      predictedActivity = 0; // WALKING (0) - merged, no more upstairs/downstairs
     } else {
-      predictedActivity = 5; // LAYING
+      predictedActivity = 3; // LAYING (3)
     }
 
     // Generate realistic probabilities
