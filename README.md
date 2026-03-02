@@ -55,11 +55,9 @@ This will create new model in `trained_model/` folder.
 ## 📱 Supported Activities
 
 1. **WALKING** - Normal walking
-2. **WALKING_UPSTAIRS** - Walking up stairs  
-3. **WALKING_DOWNSTAIRS** - Walking down stairs
-4. **SITTING** - Sitting position
-5. **STANDING** - Standing position
-6. **LAYING** - Lying down
+2. **SITTING** - Sitting position
+3. **STANDING** - Standing position
+4. **LAYING** - Lying down
 
 ## ⚙️ Technical Stack
 
