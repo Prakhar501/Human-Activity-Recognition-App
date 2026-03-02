@@ -1,0 +1,38 @@
+name: flutter_har_app
+description: A Flutter app for Human Activity Recognition using sensors and PyTorch model
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI
+  cupertino_icons: ^1.0.6
+  
+  # Sensors
+  sensors_plus: ^4.0.2
+  
+  # Permissions
+  permission_handler: ^11.3.0
+  
+  # ML - TensorFlow Lite for Flutter
+  tflite_flutter: ^0.12.1
+  
+  # State Management
+  provider: ^6.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/models/har_model.tflite
+    - assets/models/har_model_combined_4act.tflite
+    # New combined model trained on UCI + Personal dataset (4 activities)

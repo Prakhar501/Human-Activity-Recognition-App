@@ -1,0 +1,12 @@
+FEDERATED MODEL - DETAILED CLASSIFICATION REPORT
+(From Previous FedAvg Training - 75 Rounds)
+================================================================================
+
+Accuracy: 0.8985 (89.85%)
+Loss: 0.257693
+Precision (weighted): 0.9122
+Recall (weighted): 0.8985
+F1-Score (weighted): 0.8997
+
+Per-class breakdown not available (using cached overall metrics from previous training)
+To get detailed per-class metrics, retrain the federated model with federated_train.py
