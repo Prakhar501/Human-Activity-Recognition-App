@@ -1,0 +1,8 @@
+{
+    "dataset": "UCI-HAR Only",
+    "train_samples": 7352,
+    "test_samples": 2947,
+    "train_accuracy": 0.8551414608955383,
+    "test_accuracy": 0.9328130483627319,
+    "epochs_trained": 50
+}

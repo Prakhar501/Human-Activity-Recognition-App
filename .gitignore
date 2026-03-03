@@ -57,6 +57,10 @@ flutter_har_app/ios/.symlinks/
 dataset/__MACOSX/
 dataset/processed/
 
+# Results and Metrics (experimental data)
+results_and_metrics/
+federated/results/*.h5
+
 # Build outputs
 *.apk
 *.ipa

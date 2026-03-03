@@ -19,7 +19,7 @@ from .model_utils import create_cnn_model, compile_model, average_weights
 from .data_utils import load_all_data, partition_data_non_iid
 from .client import FederatedClient, ClientManager
 from .server import FederatedServer
-from .hyperparameter_optimization import HyperparameterOptimizer, HyperparameterSpace
+# from .hyperparameter_optimization import HyperparameterOptimizer, HyperparameterSpace  # Optional module
 
 __all__ = [
     'create_cnn_model',

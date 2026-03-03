@@ -4,6 +4,6 @@
     "local_epochs": 2,
     "batch_size": 32,
     "learning_rate": 0.001,
-    "accuracy": 0.878,
-    "description": "Best configuration found - Federated Learning with 5 clients"
+    "accuracy": 0.8985,
+    "description": "Best configuration found - Federated Learning with 5 clients (Final accuracy after 75 rounds)"
 }

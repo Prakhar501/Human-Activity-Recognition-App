@@ -1,0 +1,29 @@
+{
+    "federated": {
+        "1": 0.6289787888526917,
+        "5": 0.6813660264015198,
+        "10": 0.7049071788787842,
+        "20": 0.7761936187744141,
+        "31": 0.818965494632721,
+        "50": 0.8415119647979736,
+        "55": 0.8192970752716064,
+        "65": 0.8527851700782776,
+        "75": 0.8975464105606079
+    },
+    "uci_only": {
+        "dataset": "UCI-HAR Only",
+        "train_samples": 7352,
+        "test_samples": 2947,
+        "train_accuracy": 0.8551414608955383,
+        "test_accuracy": 0.9328130483627319,
+        "epochs_trained": 50
+    },
+    "personal_only": {
+        "dataset": "Personal/Custom Only",
+        "train_samples": 394,
+        "test_samples": 99,
+        "train_accuracy": 0.9416243433952332,
+        "test_accuracy": 0.939393937587738,
+        "epochs_trained": 27
+    }
+}

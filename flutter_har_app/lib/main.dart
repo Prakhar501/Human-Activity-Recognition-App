@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'services/sensor_data_collector.dart';
 import 'models/har_model.dart';
+import 'services/federated_client.dart';
 
 void main() {
   runApp(const MyApp());
@@ -53,6 +54,7 @@ class _HARHomePageState extends State<HARHomePage> {
   // Services
   late SensorDataCollector _sensorCollector;
   late HARModel _harModel;
+  FederatedClient? _federatedClient;
 
   // State variables
   bool _isDetecting = false;
@@ -66,6 +68,11 @@ class _HARHomePageState extends State<HARHomePage> {
   int _correctPredictions = 0;
   int _totalPredictions = 0;
   String _selectedTrueActivity = "WALKING";
+  
+  // Federated Learning
+  bool _isFLTraining = false;
+  String _flStatus = 'Not connected';
+  int _flRound = 0;
 
   // Helper function to format activity names for display
   String _formatActivityName(String activityName) {
@@ -96,6 +103,44 @@ class _HARHomePageState extends State<HARHomePage> {
 
     // Load ML model
     await _loadModel();
+    
+    // Initialize Federated Learning Client
+    _initializeFederatedLearning();
+  }
+  
+  void _initializeFederatedLearning() {
+    // IMPORTANT: Replace with your computer's local IP address
+    // Windows: Run 'ipconfig' in terminal, look for IPv4 Address
+    // Linux/Mac: Run 'ifconfig', look for inet address
+    const String serverIp = '192.168.1.4'; // Your computer's IP
+    const String serverPort = '5000';
+    
+    _federatedClient = FederatedClient(
+      serverUrl: 'http://$serverIp:$serverPort',
+    );
+    
+    // Check server connection
+    _checkFLServer();
+  }
+  
+  Future<void> _checkFLServer() async {
+    if (_federatedClient == null) return;
+    
+    final connected = await _federatedClient!.checkServerConnection();
+    setState(() {
+      _flStatus = connected ? 'Connected ✅' : 'Server offline ❌';
+    });
+    
+    if (connected) {
+      // Get server status
+      final status = await _federatedClient!.getServerStatus();
+      if (status != null) {
+        setState(() {
+          _flRound = status['current_round'] ?? 0;
+          _flStatus = 'Connected ✅ (Round $_flRound)';
+        });
+      }
+    }
   }
 
   Future<void> _requestPermissions() async {
@@ -179,6 +224,62 @@ class _HARHomePageState extends State<HARHomePage> {
 
     _sensorCollector.stopCollecting();
     _showSnackBar("Detection stopped", Colors.blue);
+  }
+  
+  // Federated Learning Training
+  Future<void> _startFederatedTraining() async {
+    if (_isFLTraining) {
+      _showSnackBar("Already training...", Colors.orange);
+      return;
+    }
+    
+    if (_federatedClient == null) {
+      _showSnackBar("FL Client not initialized", Colors.red);
+      return;
+    }
+    
+    setState(() {
+      _isFLTraining = true;
+      _flStatus = 'Training... 🔄';
+    });
+    
+    _showSnackBar("Starting federated training...", Colors.blue);
+    
+    try {
+      // Simulate training round
+      // In production, you would:
+      // 1. Collect sensor data samples
+      // 2. Train model locally (if supported)
+      // 3. Extract weights from trained model
+      
+      final success = await _federatedClient!.simulateTrainingRound();
+      
+      if (success) {
+        setState(() {
+          _flRound++;
+          _flStatus = 'Training complete ✅ (Round $_flRound)';
+        });
+        _showSnackBar("✅ Federated round complete! Model updated.", Colors.green);
+        
+        // Optionally reload the model with new weights
+        // await _harModel.loadModel();
+      } else {
+        setState(() {
+          _flStatus = 'Waiting for clients... ⏳';
+        });
+        _showSnackBar("⏳ Waiting for more clients to join...", Colors.orange);
+      }
+    } catch (e) {
+      setState(() {
+        _flStatus = 'Training failed ❌';
+      });
+      _showSnackBar("❌ Training failed: $e", Colors.red);
+      print('FL Training error: $e');
+    } finally {
+      setState(() {
+        _isFLTraining = false;
+      });
+    }
   }
 
   void _showSnackBar(String message, Color color) {
@@ -266,6 +367,11 @@ class _HARHomePageState extends State<HARHomePage> {
 
                       // Control Buttons
                       _buildControlButtons(context, screenWidth),
+                      
+                      SizedBox(height: verticalSpacing * 1.5),
+                      
+                      // Federated Learning Card
+                      _buildFederatedLearningCard(context, screenWidth, cardPadding),
                       
                       SizedBox(height: verticalSpacing),
                     ],
@@ -808,4 +914,179 @@ class _HARHomePageState extends State<HARHomePage> {
       ],
     );
   }
-}
+  
+  // Federated Learning Card
+  Widget _buildFederatedLearningCard(BuildContext context, double screenWidth, double cardPadding) {
+    final fontSize = (screenWidth * 0.035).clamp(12.0, 16.0);
+    final iconSize = (screenWidth * 0.05).clamp(20.0, 24.0);
+    
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(cardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Icon(
+                  Icons.cloud_sync_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: iconSize,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Federated Learning',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    fontSize: (screenWidth * 0.04).clamp(14.0, 18.0),
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _flStatus.contains('✅') 
+                        ? Colors.green.withOpacity(0.1)
+                        : _flStatus.contains('❌')
+                            ? Colors.red.withOpacity(0.1)
+                            : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _flStatus.contains('✅') 
+                          ? Colors.green
+                          : _flStatus.contains('❌')
+                              ? Colors.red
+                              : Colors.orange,
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    _flStatus.contains('✅') ? 'Online' : 
+                    _flStatus.contains('❌') ? 'Offline' : 'Training',
+                    style: TextStyle(
+                      fontSize: (screenWidth * 0.028).clamp(10.0, 12.0),
+                      fontWeight: FontWeight.bold,
+                      color: _flStatus.contains('✅') 
+                          ? Colors.green
+                          : _flStatus.contains('❌')
+                              ? Colors.red
+                              : Colors.orange,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Description
+            Text(
+              'Help improve the model by contributing to federated training. Your data stays on your device.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontSize: fontSize,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Status Row
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Server Status',
+                        style: TextStyle(
+                          fontSize: fontSize,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _flStatus,
+                        style: TextStyle(
+                          fontSize: fontSize,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Training Rounds',
+                        style: TextStyle(
+                          fontSize: fontSize,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$_flRound',
+                        style: TextStyle(
+                          fontSize: fontSize,
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Training Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isFLTraining ? null : _startFederatedTraining,
+                icon: Icon(
+                  _isFLTraining ? Icons.hourglass_empty : Icons.upload,
+                  size: iconSize,
+                ),
+                label: Text(
+                  _isFLTraining ? 'Training...' : 'Contribute to Training',
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                  foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+                  padding: EdgeInsets.symmetric(vertical: cardPadding * 0.8),
+                  elevation: _isFLTraining ? 0 : 2,
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 8),
+            
+            // Refresh Status Button
+            TextButton.icon(
+              onPressed: _isFLTraining ? null : _checkFLServer,
+              icon: Icon(Icons.refresh, size: iconSize * 0.8),
+              label: Text(
+                'Refresh Status',
+                style: TextStyle(fontSize: fontSize),
+              ),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }}

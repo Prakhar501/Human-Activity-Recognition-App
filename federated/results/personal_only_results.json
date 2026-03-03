@@ -1,0 +1,8 @@
+{
+    "dataset": "Personal/Custom Only",
+    "train_samples": 394,
+    "test_samples": 99,
+    "train_accuracy": 0.9416243433952332,
+    "test_accuracy": 0.939393937587738,
+    "epochs_trained": 27
+}
